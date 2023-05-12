@@ -123,9 +123,15 @@ class Zero123(nn.Module):
             t_in = torch.cat([t] * 2)
             T = torch.tensor([math.radians(polar), math.sin(math.radians(azimuth)), math.cos(math.radians(azimuth)), radius])
             T = T[None, None, :].to(self.device)
-            cond = {}
             clip_emb = self.model.cc_projection(torch.cat([embeddings[0], T], dim=-1))
-            cond['c_crossattn'] = [torch.cat([torch.zeros_like(clip_emb).to(self.device), clip_emb], dim=0)]
+            cond = {
+                'c_crossattn': [
+                    torch.cat(
+                        [torch.zeros_like(clip_emb).to(self.device), clip_emb],
+                        dim=0,
+                    )
+                ]
+            }
             cond['c_concat'] = [torch.cat([torch.zeros_like(embeddings[1]).to(self.device), embeddings[1]], dim=0)]
 
             noise_pred = self.model.apply_model(x_in, t_in, cond)
@@ -137,34 +143,7 @@ class Zero123(nn.Module):
         grad = grad_scale * w * (noise_pred - noise)
         grad = torch.nan_to_num(grad)
 
-        # import kiui
-        # if not as_latent:
-        #     kiui.vis.plot_image(pred_rgb_256)
-        # kiui.vis.plot_matrix(latents)
-        # kiui.vis.plot_matrix(grad)
-
-        # import kiui
-        # latents = torch.randn((1, 4, 32, 32), device=self.device)
-        # kiui.lo(latents)
-        # self.scheduler.set_timesteps(30)
-        # with torch.no_grad():
-        #     for i, t in enumerate(self.scheduler.timesteps):
-        #         x_in = torch.cat([latents] * 2)
-        #         t_in = torch.cat([t.view(1)] * 2).to(self.device)
-
-        #         noise_pred = self.model.apply_model(x_in, t_in, cond)
-        #         noise_pred_uncond, noise_pred_cond = noise_pred.chunk(2)
-        #         noise_pred = noise_pred_uncond + 3 * (noise_pred_cond - noise_pred_uncond)
-
-        #         latents = self.scheduler.step(noise_pred, t, latents)['prev_sample']
-        # imgs = self.decode_latents(latents)
-        # print(polar, azimuth, radius)
-        # kiui.vis.plot_image(pred_rgb_256, imgs)
-
-        # since we omitted an item in grad, we need to use the custom function to specify the gradient
-        loss = SpecifyGradient.apply(latents, grad)
-
-        return loss
+        return SpecifyGradient.apply(latents, grad)
     
     # verification
     @torch.no_grad()
@@ -178,16 +157,21 @@ class Zero123(nn.Module):
         T = torch.tensor([math.radians(polar), math.sin(math.radians(azimuth)), math.cos(math.radians(azimuth)), radius])
         T = T[None, None, :].to(self.device)
 
-        cond = {}
         clip_emb = self.model.cc_projection(torch.cat([embeddings[0], T], dim=-1))
-        cond['c_crossattn'] = [torch.cat([torch.zeros_like(clip_emb).to(self.device), clip_emb], dim=0)]
+        cond = {
+            'c_crossattn': [
+                torch.cat(
+                    [torch.zeros_like(clip_emb).to(self.device), clip_emb], dim=0
+                )
+            ]
+        }
         cond['c_concat'] = [torch.cat([torch.zeros_like(embeddings[1]).to(self.device), embeddings[1]], dim=0)]
 
         # produce latents loop
         latents = torch.randn((1, 4, h // 8, w // 8), device=self.device)
         self.scheduler.set_timesteps(ddim_steps)
-    
-        for i, t in enumerate(self.scheduler.timesteps):
+
+        for t in self.scheduler.timesteps:
             x_in = torch.cat([latents] * 2)
             t_in = torch.cat([t.view(1)] * 2).to(self.device)
 
@@ -199,7 +183,7 @@ class Zero123(nn.Module):
 
         imgs = self.decode_latents(latents)
         imgs = imgs.cpu().numpy().transpose(0, 2, 3, 1)
-        
+
         return imgs
 
     def decode_latents(self, latents):
@@ -214,8 +198,7 @@ class Zero123(nn.Module):
         # imgs: [B, 3, 256, 256] RGB space image
         # with self.model.ema_scope():
         imgs = imgs * 2 - 1
-        latents = self.model.get_first_stage_encoding(self.model.encode_first_stage(imgs))
-        return latents # [B, 4, 32, 32] Latent space image
+        return self.model.get_first_stage_encoding(self.model.encode_first_stage(imgs))
     
     
 if __name__ == '__main__':
@@ -223,7 +206,7 @@ if __name__ == '__main__':
     import argparse
     import numpy as np
     import matplotlib.pyplot as plt
-    
+
     parser = argparse.ArgumentParser()
 
     parser.add_argument('input', type=str)
@@ -244,10 +227,10 @@ if __name__ == '__main__':
     image = image.astype(np.float32) / 255.0
     image = torch.from_numpy(image).permute(2, 0, 1).unsqueeze(0).contiguous().to(device)
 
-    print(f'[INFO] loading model ...')
+    print('[INFO] loading model ...')
     zero123 = Zero123(device, opt.fp16)
 
-    print(f'[INFO] running model ...')
+    print('[INFO] running model ...')
     outputs = zero123(image, polar=opt.polar, azimuth=opt.azimuth, radius=opt.radius)
     plt.imshow(outputs[0])
     plt.show()

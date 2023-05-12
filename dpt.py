@@ -42,10 +42,7 @@ class AddReadout(nn.Module):
         self.start_index = start_index
 
     def forward(self, x):
-        if self.start_index == 2:
-            readout = (x[:, 0] + x[:, 1]) / 2
-        else:
-            readout = x[:, 0]
+        readout = (x[:, 0] + x[:, 1]) / 2 if self.start_index == 2 else x[:, 0]
         return x[:, self.start_index :] + readout.unsqueeze(1)
 
 
@@ -84,10 +81,10 @@ def forward_vit(pretrained, x):
     layer_3 = pretrained.activations["3"]
     layer_4 = pretrained.activations["4"]
 
-    layer_1 = pretrained.act_postprocess1[0:2](layer_1)
-    layer_2 = pretrained.act_postprocess2[0:2](layer_2)
-    layer_3 = pretrained.act_postprocess3[0:2](layer_3)
-    layer_4 = pretrained.act_postprocess4[0:2](layer_4)
+    layer_1 = pretrained.act_postprocess1[:2](layer_1)
+    layer_2 = pretrained.act_postprocess2[:2](layer_2)
+    layer_3 = pretrained.act_postprocess3[:2](layer_3)
+    layer_4 = pretrained.act_postprocess4[:2](layer_4)
 
 
     unflattened_dim = 2
@@ -96,7 +93,7 @@ def forward_vit(pretrained, x):
         int(torch.div(w, pretrained.model.patch_size[0], rounding_mode='floor')),
     )
     unflatten = nn.Sequential(nn.Unflatten(unflattened_dim, unflattened_size))
-    
+
 
     if layer_1.ndim == 3:
         layer_1 = unflatten(layer_1)
@@ -107,10 +104,10 @@ def forward_vit(pretrained, x):
     if layer_4.ndim == 3:
         layer_4 = unflatten_with_named_tensor(layer_4, unflattened_dim, unflattened_size)
 
-    layer_1 = pretrained.act_postprocess1[3 : len(pretrained.act_postprocess1)](layer_1)
-    layer_2 = pretrained.act_postprocess2[3 : len(pretrained.act_postprocess2)](layer_2)
-    layer_3 = pretrained.act_postprocess3[3 : len(pretrained.act_postprocess3)](layer_3)
-    layer_4 = pretrained.act_postprocess4[3 : len(pretrained.act_postprocess4)](layer_4)
+    layer_1 = pretrained.act_postprocess1[3:](layer_1)
+    layer_2 = pretrained.act_postprocess2[3:](layer_2)
+    layer_3 = pretrained.act_postprocess3[3:](layer_3)
+    layer_4 = pretrained.act_postprocess4[3:](layer_4)
 
     return layer_1, layer_2, layer_3, layer_4
 
@@ -187,9 +184,7 @@ def get_readout_oper(vit_features, features, use_readout, start_index=1):
     elif use_readout == "add":
         readout_oper = [AddReadout(start_index)] * len(features)
     elif use_readout == "project":
-        readout_oper = [
-            ProjectReadout(vit_features, start_index) for out_feat in features
-        ]
+        readout_oper = [ProjectReadout(vit_features, start_index) for _ in features]
     else:
         assert (
             False
@@ -315,7 +310,7 @@ def _make_vit_b16_backbone(
 def _make_pretrained_vitl16_384(pretrained, use_readout="ignore", hooks=None):
     model = timm.create_model("vit_large_patch16_384", pretrained=pretrained)
 
-    hooks = [5, 11, 17, 23] if hooks == None else hooks
+    hooks = [5, 11, 17, 23] if hooks is None else hooks
     return _make_vit_b16_backbone(
         model,
         features=[256, 512, 1024, 1024],
@@ -328,7 +323,7 @@ def _make_pretrained_vitl16_384(pretrained, use_readout="ignore", hooks=None):
 def _make_pretrained_vitb16_384(pretrained, use_readout="ignore", hooks=None):
     model = timm.create_model("vit_base_patch16_384", pretrained=pretrained)
 
-    hooks = [2, 5, 8, 11] if hooks == None else hooks
+    hooks = [2, 5, 8, 11] if hooks is None else hooks
     return _make_vit_b16_backbone(
         model, features=[96, 192, 384, 768], hooks=hooks, use_readout=use_readout
     )
@@ -337,7 +332,7 @@ def _make_pretrained_vitb16_384(pretrained, use_readout="ignore", hooks=None):
 def _make_pretrained_deitb16_384(pretrained, use_readout="ignore", hooks=None):
     model = timm.create_model("vit_deit_base_patch16_384", pretrained=pretrained)
 
-    hooks = [2, 5, 8, 11] if hooks == None else hooks
+    hooks = [2, 5, 8, 11] if hooks is None else hooks
     return _make_vit_b16_backbone(
         model, features=[96, 192, 384, 768], hooks=hooks, use_readout=use_readout
     )
@@ -348,7 +343,7 @@ def _make_pretrained_deitb16_distil_384(pretrained, use_readout="ignore", hooks=
         "vit_deit_base_distilled_patch16_384", pretrained=pretrained
     )
 
-    hooks = [2, 5, 8, 11] if hooks == None else hooks
+    hooks = [2, 5, 8, 11] if hooks is None else hooks
     return _make_vit_b16_backbone(
         model,
         features=[96, 192, 384, 768],
@@ -498,7 +493,7 @@ def _make_pretrained_vitb_rn50_384(
 ):
     model = timm.create_model("vit_base_resnet50_384", pretrained=pretrained)
 
-    hooks = [0, 1, 8, 11] if hooks == None else hooks
+    hooks = [0, 1, 8, 11] if hooks is None else hooks
     return _make_vit_b_rn50_backbone(
         model,
         features=[256, 512, 768, 768],
@@ -589,7 +584,7 @@ def _make_efficientnet_backbone(effnet):
     pretrained = nn.Module()
 
     pretrained.layer1 = nn.Sequential(
-        effnet.conv_stem, effnet.bn1, effnet.act1, *effnet.blocks[0:2]
+        effnet.conv_stem, effnet.bn1, effnet.act1, *effnet.blocks[:2]
     )
     pretrained.layer2 = nn.Sequential(*effnet.blocks[2:3])
     pretrained.layer3 = nn.Sequential(*effnet.blocks[3:5])
@@ -897,13 +892,11 @@ class DPT(BaseModel):
         path_2 = self.scratch.refinenet2(path_3, layer_2_rn)
         path_1 = self.scratch.refinenet1(path_2, layer_1_rn)
 
-        out = self.scratch.output_conv(path_1)
-
-        return out
+        return self.scratch.output_conv(path_1)
 
 class DPTDepthModel(DPT):
     def __init__(self, path=None, non_negative=True, num_channels=1, **kwargs):
-        features = kwargs["features"] if "features" in kwargs else 256
+        features = kwargs.get("features", 256)
 
         head = nn.Sequential(
             nn.Conv2d(features, features // 2, kernel_size=3, stride=1, padding=1),

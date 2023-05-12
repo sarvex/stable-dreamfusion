@@ -99,8 +99,7 @@ class ClassEmbedder(nn.Module):
             key = self.key
         # this is for use in crossattn
         c = batch[key][:, None]
-        c = self.embedding(c)
-        return c
+        return self.embedding(c)
 
 
 class TransformerEmbedder(AbstractEncoder):
@@ -113,8 +112,7 @@ class TransformerEmbedder(AbstractEncoder):
 
     def forward(self, tokens):
         tokens = tokens.to(self.device)  # meh
-        z = self.transformer(tokens, return_embeddings=True)
-        return z
+        return self.transformer(tokens, return_embeddings=True)
 
     def encode(self, x):
         return self(x)
@@ -133,15 +131,12 @@ class BERTTokenizer(AbstractEncoder):
     def forward(self, text):
         batch_encoding = self.tokenizer(text, truncation=True, max_length=self.max_length, return_length=True,
                                         return_overflowing_tokens=False, padding="max_length", return_tensors="pt")
-        tokens = batch_encoding["input_ids"].to(self.device)
-        return tokens
+        return batch_encoding["input_ids"].to(self.device)
 
     @torch.no_grad()
     def encode(self, text):
         tokens = self(text)
-        if not self.vq_interface:
-            return tokens
-        return None, None, [None, None, tokens]
+        return tokens if not self.vq_interface else (None, None, [None, None, tokens])
 
     def decode(self, text):
         return text
@@ -161,12 +156,8 @@ class BERTEmbedder(AbstractEncoder):
                                               emb_dropout=embedding_dropout)
 
     def forward(self, text):
-        if self.use_tknz_fn:
-            tokens = self.tknz_fn(text)#.to(self.device)
-        else:
-            tokens = text
-        z = self.transformer(tokens, return_embeddings=True)
-        return z
+        tokens = self.tknz_fn(text) if self.use_tknz_fn else text
+        return self.transformer(tokens, return_embeddings=True)
 
     def encode(self, text):
         # output of length 77
@@ -203,8 +194,7 @@ class FrozenT5Embedder(AbstractEncoder):
         tokens = batch_encoding["input_ids"].to(self.device)
         outputs = self.transformer(input_ids=tokens)
 
-        z = outputs.last_hidden_state
-        return z
+        return outputs.last_hidden_state
 
     def encode(self, text):
         return self(text)
@@ -221,8 +211,8 @@ class FrozenFaceEncoder(AbstractEncoder):
             p.requires_grad = False
         # Mapper is trainable
         self.mapper = torch.nn.Linear(512, 768)
-        p = 0.25
         if augment:
+            p = 0.25
             self.augment = K.AugmentationSequential(
                 K.RandomHorizontalFlip(p=0.5),
                 K.RandomEqualize(p=p),
@@ -273,8 +263,7 @@ class FrozenCLIPEmbedder(AbstractEncoder):
         tokens = batch_encoding["input_ids"].to(self.device)
         outputs = self.transformer(input_ids=tokens)
 
-        z = outputs.last_hidden_state
-        return z
+        return outputs.last_hidden_state
 
     def encode(self, text):
         return self(text)
@@ -301,8 +290,7 @@ class ClipImageProjector(AbstractEncoder):
     def get_null_cond(self, version, max_length):
         device = self.mean.device
         embedder = FrozenCLIPEmbedder(version=version, device=device, max_length=max_length)
-        null_cond = embedder([""])
-        return null_cond
+        return embedder([""])
 
     def preprocess(self, x):
         # Expects inputs in the range -1, 1
@@ -310,9 +298,7 @@ class ClipImageProjector(AbstractEncoder):
                                    interpolation='bicubic',align_corners=True,
                                    antialias=self.antialias)
         x = (x + 1.) / 2.
-        # renormalize according to clip
-        x = kornia.enhance.normalize(x, self.mean, self.std)
-        return x
+        return kornia.enhance.normalize(x, self.mean, self.std)
 
     def forward(self, x):
         if isinstance(x, list):
@@ -366,9 +352,7 @@ class FrozenCLIPImageEmbedder(AbstractEncoder):
                                    interpolation='bicubic',align_corners=True,
                                    antialias=self.antialias)
         x = (x + 1.) / 2.
-        # renormalize according to clip
-        x = kornia.enhance.normalize(x, self.mean, self.std)
-        return x
+        return kornia.enhance.normalize(x, self.mean, self.std)
 
     def forward(self, x):
         # x is assumed to be in range [-1,1]
@@ -411,14 +395,11 @@ class FrozenCLIPImageMutliEmbedder(AbstractEncoder):
         # Expects inputs in the range -1, 1
         randcrop = transforms.RandomResizedCrop(224, scale=(0.085, 1.0), ratio=(1,1))
         max_crops = self.max_crops
-        patches = []
         crops = [randcrop(x) for _ in range(max_crops)]
-        patches.extend(crops)
+        patches = list(crops)
         x = torch.cat(patches, dim=0)
         x = (x + 1.) / 2.
-        # renormalize according to clip
-        x = kornia.enhance.normalize(x, self.mean, self.std)
-        return x
+        return kornia.enhance.normalize(x, self.mean, self.std)
 
     def forward(self, x):
         # x is assumed to be in range [-1,1]
@@ -460,7 +441,7 @@ class SpatialRescaler(nn.Module):
             self.channel_mapper = nn.Conv2d(in_channels,out_channels,1,bias=bias)
 
     def forward(self,x):
-        for stage in range(self.n_stages):
+        for _ in range(self.n_stages):
             x = self.interpolator(x, scale_factor=self.multiplier)
 
 

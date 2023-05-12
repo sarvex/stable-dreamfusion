@@ -40,16 +40,12 @@ class FreqEncoder_torch(nn.Module):
 
         for i in range(max_level):
             freq = self.freq_bands[i]
-            for p_fn in self.periodic_fns:
-                out.append(p_fn(input * freq))
-
+            out.extend(p_fn(input * freq) for p_fn in self.periodic_fns)
         # append 0
         if self.N_freqs - max_level > 0:
             out.append(torch.zeros(input.shape[0], (self.N_freqs - max_level) * 2 * input.shape[1], device=input.device, dtype=input.dtype))
-        
-        out = torch.cat(out, dim=-1)
 
-        return out
+        return torch.cat(out, dim=-1)
 
 def get_encoder(encoding, input_dim=3, 
                 multires=6, 

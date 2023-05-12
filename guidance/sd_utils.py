@@ -46,7 +46,7 @@ class StableDiffusion(nn.Module):
         self.device = device
         self.sd_version = sd_version
 
-        print(f'[INFO] loading stable diffusion...')
+        print('[INFO] loading stable diffusion...')
 
         if hf_key is not None:
             print(f'[INFO] using hugging face custom model key: {hf_key}')
@@ -100,7 +100,7 @@ class StableDiffusion(nn.Module):
         self.max_step = int(self.num_train_timesteps * t_range[1])
         self.alphas = self.scheduler.alphas_cumprod.to(self.device) # for convenience
 
-        print(f'[INFO] loaded stable diffusion!')
+        print('[INFO] loaded stable diffusion!')
 
     @torch.no_grad()
     def get_text_embeds(self, prompt):
@@ -108,9 +108,7 @@ class StableDiffusion(nn.Module):
 
         # positive
         inputs = self.tokenizer(prompt, padding='max_length', max_length=self.tokenizer.model_max_length, return_tensors='pt')
-        embeddings = self.text_encoder(inputs.input_ids.to(self.device))[0]
-
-        return embeddings
+        return self.text_encoder(inputs.input_ids.to(self.device))[0]
 
 
     def train_step(self, text_embeddings, pred_rgb, guidance_scale=100, as_latent=False, grad_scale=1):
@@ -143,7 +141,7 @@ class StableDiffusion(nn.Module):
         noise_pred_uncond, noise_pred_pos = noise_pred.chunk(2)
 
         noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_pos - noise_pred_uncond)
-        
+
 
         # import kiui
         # latents_tmp = torch.randn((1, 4, 64, 64), device=self.device)
@@ -164,10 +162,7 @@ class StableDiffusion(nn.Module):
         grad = grad_scale * w * (noise_pred - noise)
         grad = torch.nan_to_num(grad)
 
-        # since we omitted an item in grad, we need to use the custom function to specify the gradient
-        loss = SpecifyGradient.apply(latents, grad)
-
-        return loss
+        return SpecifyGradient.apply(latents, grad)
 
     @torch.no_grad()
     def produce_latents(self, text_embeddings, height=512, width=512, num_inference_steps=50, guidance_scale=7.5, latents=None):
@@ -177,7 +172,7 @@ class StableDiffusion(nn.Module):
 
         self.scheduler.set_timesteps(num_inference_steps)
 
-        for i, t in enumerate(self.scheduler.timesteps):
+        for t in self.scheduler.timesteps:
             # expand the latents if we are doing classifier-free guidance to avoid doing two forward passes.
             latent_model_input = torch.cat([latents] * 2)
 
@@ -194,7 +189,7 @@ class StableDiffusion(nn.Module):
 
             # compute the previous noisy sample x_t -> x_t-1
             latents = self.scheduler.step(noise_pred, t, latents)['prev_sample']
-        
+
         return latents
 
     def decode_latents(self, latents):
@@ -212,9 +207,7 @@ class StableDiffusion(nn.Module):
         imgs = 2 * imgs - 1
 
         posterior = self.vae.encode(imgs).latent_dist
-        latents = posterior.sample() * self.vae.config.scaling_factor
-
-        return latents
+        return posterior.sample() * self.vae.config.scaling_factor
 
     def prompt_to_img(self, prompts, negative_prompts='', height=512, width=512, num_inference_steps=50, guidance_scale=7.5, latents=None):
 

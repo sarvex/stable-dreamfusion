@@ -39,7 +39,7 @@ def raymarching_train(rays_o: ti.types.ndarray(ndim=2),
         t = t1
         N_samples = 0
 
-        while (0 <= t) & (t < t2) & (N_samples < max_samples):
+        while (t >= 0) & (t < t2) & (N_samples < max_samples):
             xyz = ray_o + t * ray_d
             dt = calc_dt(t, exp_step_factor, grid_size, scale)
             mip = ti.max(mip_from_pos(xyz, cascades),
@@ -55,11 +55,9 @@ def raymarching_train(rays_o: ti.types.ndarray(ndim=2),
             # nxyz = ti.ceil(nxyz)
 
             idx = mip * grid_size3 + __morton3D(ti.cast(nxyz, ti.u32))
-            occ = density_bitfield[ti.u32(idx // 8)] & (1 << ti.u32(idx % 8))
-            # idx = __morton3D(ti.cast(nxyz, ti.uint32))
-            # occ = density_bitfield[mip, idx//8] & (1 << ti.cast(idx%8, ti.uint32))
-
-            if occ:
+            if occ := density_bitfield[ti.u32(idx // 8)] & (
+                1 << ti.u32(idx % 8)
+            ):
                 t += dt
                 N_samples += 1
             else:
@@ -98,11 +96,9 @@ def raymarching_train(rays_o: ti.types.ndarray(ndim=2),
             # nxyz = ti.ceil(nxyz)
 
             idx = mip * grid_size3 + __morton3D(ti.cast(nxyz, ti.u32))
-            occ = density_bitfield[ti.u32(idx // 8)] & (1 << ti.u32(idx % 8))
-            # idx = __morton3D(ti.cast(nxyz, ti.uint32))
-            # occ = density_bitfield[mip, idx//8] & (1 << ti.cast(idx%8, ti.uint32))
-
-            if occ:
+            if occ := density_bitfield[ti.u32(idx // 8)] & (
+                1 << ti.u32(idx % 8)
+            ):
                 s = start_idx + samples
                 xyzs[s, 0] = xyz[0]
                 xyzs[s, 1] = xyz[1]
@@ -260,7 +256,7 @@ def raymarching_test_kernel(
 
         s = 0
 
-        while (0 <= t) & (t < t2) & (s < N_samples):
+        while (t >= 0) & (t < t2) & (s < N_samples):
             xyz = ray_o + t * ray_d
             dt = calc_dt(t, exp_step_factor, grid_size, scale)
             mip = ti.max(mip_from_pos(xyz, cascades),
@@ -276,9 +272,9 @@ def raymarching_test_kernel(
             # nxyz = ti.ceil(nxyz)
 
             idx = mip * grid_size3 + __morton3D(ti.cast(nxyz, ti.u32))
-            occ = density_bitfield[ti.u32(idx // 8)] & (1 << ti.u32(idx % 8))
-
-            if occ:
+            if occ := density_bitfield[ti.u32(idx // 8)] & (
+                1 << ti.u32(idx % 8)
+            ):
                 xyzs[n, s, 0] = xyz[0]
                 xyzs[n, s, 1] = xyz[1]
                 xyzs[n, s, 2] = xyz[2]

@@ -41,7 +41,5 @@ class CLIP(nn.Module):
         image_z = self.clip_model.encode_image(pred_rgb)
         image_z = image_z / image_z.norm(dim=-1, keepdim=True) # normalize features
 
-        loss = - (image_z * text_z).sum(-1).mean()
-
-        return loss
+        return - (image_z * text_z).sum(-1).mean()
 

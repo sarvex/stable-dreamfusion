@@ -50,9 +50,9 @@ class BLIP2():
         inputs = self.processor(image, return_tensors="pt").to(self.device, torch.float16)
 
         generated_ids = self.model.generate(**inputs, max_new_tokens=20)
-        generated_text = self.processor.batch_decode(generated_ids, skip_special_tokens=True)[0].strip()
-
-        return generated_text
+        return self.processor.batch_decode(
+            generated_ids, skip_special_tokens=True
+        )[0].strip()
 
 
 class DPT():
@@ -83,9 +83,7 @@ class DPT():
         # load model
         checkpoint = torch.load(path, map_location='cpu')
         if 'state_dict' in checkpoint:
-            state_dict = {}
-            for k, v in checkpoint['state_dict'].items():
-                state_dict[k[6:]] = v
+            state_dict = {k[6:]: v for k, v in checkpoint['state_dict'].items()}
         else:
             state_dict = checkpoint
         self.model.load_state_dict(state_dict)
@@ -118,7 +116,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('path', type=str, help="path to image (png, jpeg, etc.)")
     opt = parser.parse_args()
-    
+
     out_dir = os.path.dirname(opt.path)
     out_rgba = os.path.join(out_dir, os.path.basename(opt.path).split('.')[0] + '_rgba.png')
     out_depth = os.path.join(out_dir, os.path.basename(opt.path).split('.')[0] + '_depth.png')
@@ -126,7 +124,7 @@ if __name__ == '__main__':
     out_caption = os.path.join(out_dir, os.path.basename(opt.path).split('.')[0] + '_caption.txt')
 
     # load image
-    print(f'[INFO] loading image...')
+    print('[INFO] loading image...')
     image = cv2.imread(opt.path, cv2.IMREAD_UNCHANGED)
     if image.shape[-1] == 4:
         image = cv2.cvtColor(image, cv2.COLOR_BGRA2RGB)
@@ -134,13 +132,13 @@ if __name__ == '__main__':
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
     # carve background
-    print(f'[INFO] background removal...')
+    print('[INFO] background removal...')
     carved_image = BackgroundRemoval()(image) # [H, W, 4]
     cv2.imwrite(out_rgba, cv2.cvtColor(carved_image, cv2.COLOR_RGBA2BGRA))
     mask = carved_image[..., -1] > 0
 
     # predict depth
-    print(f'[INFO] depth estimation...')
+    print('[INFO] depth estimation...')
     dpt_depth_model = DPT(task='depth')
     depth = dpt_depth_model(image)[0]
     depth[mask] = (depth[mask] - depth[mask].min()) / (depth[mask].max() - depth[mask].min() + 1e-9)
@@ -150,7 +148,7 @@ if __name__ == '__main__':
     del dpt_depth_model
 
     # predict normal
-    print(f'[INFO] normal estimation...')
+    print('[INFO] normal estimation...')
     dpt_normal_model = DPT(task='normal')
     normal = dpt_normal_model(image)[0]
     normal = (normal * 255).astype(np.uint8).transpose(1, 2, 0)

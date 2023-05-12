@@ -218,7 +218,6 @@ def load_ckpt(model, ckpt_path, model_name='model', prefixes_to_ignore=[]):
 
 def depth2img(depth):
     depth = (depth - depth.min()) / (depth.max() - depth.min())
-    depth_img = cv2.applyColorMap((depth * 255).astype(np.uint8),
-                                  cv2.COLORMAP_TURBO)
-
-    return depth_img
+    return cv2.applyColorMap(
+        (depth * 255).astype(np.uint8), cv2.COLORMAP_TURBO
+    )

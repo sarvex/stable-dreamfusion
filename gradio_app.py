@@ -7,7 +7,7 @@ from nerf.utils import *
 import gradio as gr
 import gc
 
-print(f'[INFO] loading options..')
+print('[INFO] loading options..')
 
 # fake config object, this should not be used in CMD, only allow change from gradio UI.
 parser = argparse.ArgumentParser()
@@ -99,7 +99,7 @@ print(opt)
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-print(f'[INFO] loading models..')
+print('[INFO] loading models..')
 
 if opt.guidance == 'stable-diffusion':
     from guidance.sd_utils import StableDiffusion
@@ -114,7 +114,7 @@ train_loader = NeRFDataset(opt, device=device, type='train', H=opt.h, W=opt.w, s
 valid_loader = NeRFDataset(opt, device=device, type='val', H=opt.H, W=opt.W, size=5).dataloader()
 test_loader = NeRFDataset(opt, device=device, type='test', H=opt.H, W=opt.W, size=100).dataloader()
 
-print(f'[INFO] everything loaded!')
+print('[INFO] everything loaded!')
 
 trainer = None
 model = None

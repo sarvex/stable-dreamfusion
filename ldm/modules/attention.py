@@ -241,9 +241,17 @@ class SpatialTransformer(nn.Module):
                                  padding=0)
 
         self.transformer_blocks = nn.ModuleList(
-            [BasicTransformerBlock(inner_dim, n_heads, d_head, dropout=dropout, context_dim=context_dim,
-                                   disable_self_attn=disable_self_attn)
-                for d in range(depth)]
+            [
+                BasicTransformerBlock(
+                    inner_dim,
+                    n_heads,
+                    d_head,
+                    dropout=dropout,
+                    context_dim=context_dim,
+                    disable_self_attn=disable_self_attn,
+                )
+                for _ in range(depth)
+            ]
         )
 
         self.proj_out = zero_module(nn.Conv2d(inner_dim,

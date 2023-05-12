@@ -87,7 +87,7 @@ class NeRFGUI:
         self.mode = 'image' # choose from ['image', 'depth']
         self.shading = 'albedo'
 
-        self.dynamic_resolution = True if not self.opt.dmtet else False
+        self.dynamic_resolution = not self.opt.dmtet
         self.downscale = 1
         self.train_steps = 16
 
@@ -128,45 +128,44 @@ class NeRFGUI:
     def prepare_buffer(self, outputs):
         if self.mode == 'image':
             return outputs['image'].astype(np.float32)
-        else:
-            depth = outputs['depth'].astype(np.float32)
-            depth = (depth - depth.min()) / (depth.max() - depth.min() + 1e-6)
-            return np.expand_dims(depth, -1).repeat(3, -1)
+        depth = outputs['depth'].astype(np.float32)
+        depth = (depth - depth.min()) / (depth.max() - depth.min() + 1e-6)
+        return np.expand_dims(depth, -1).repeat(3, -1)
 
     
     def test_step(self):
 
-        if self.need_update or self.spp < self.opt.max_spp:
-        
-            starter, ender = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
-            starter.record()
+        if not self.need_update and self.spp >= self.opt.max_spp:
+            return
+        starter, ender = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+        starter.record()
 
-            outputs = self.trainer.test_gui(self.cam.pose, self.cam.intrinsics, self.cam.mvp, self.W, self.H, self.bg_color, self.spp, self.downscale, self.light_dir, self.ambient_ratio, self.shading)
+        outputs = self.trainer.test_gui(self.cam.pose, self.cam.intrinsics, self.cam.mvp, self.W, self.H, self.bg_color, self.spp, self.downscale, self.light_dir, self.ambient_ratio, self.shading)
 
-            ender.record()
-            torch.cuda.synchronize()
-            t = starter.elapsed_time(ender)
+        ender.record()
+        torch.cuda.synchronize()
+        t = starter.elapsed_time(ender)
 
-            # update dynamic resolution
-            if self.dynamic_resolution:
-                # max allowed infer time per-frame is 200 ms
-                full_t = t / (self.downscale ** 2)
-                downscale = min(1, max(1/4, math.sqrt(200 / full_t)))
-                if downscale > self.downscale * 1.2 or downscale < self.downscale * 0.8:
-                    self.downscale = downscale
+        # update dynamic resolution
+        if self.dynamic_resolution:
+            # max allowed infer time per-frame is 200 ms
+            full_t = t / (self.downscale ** 2)
+            downscale = min(1, max(1/4, math.sqrt(200 / full_t)))
+            if downscale > self.downscale * 1.2 or downscale < self.downscale * 0.8:
+                self.downscale = downscale
 
-            if self.need_update:
-                self.render_buffer = self.prepare_buffer(outputs)
-                self.spp = 1
-                self.need_update = False
-            else:
-                self.render_buffer = (self.render_buffer * self.spp + self.prepare_buffer(outputs)) / (self.spp + 1)
-                self.spp += 1
+        if self.need_update:
+            self.render_buffer = self.prepare_buffer(outputs)
+            self.spp = 1
+            self.need_update = False
+        else:
+            self.render_buffer = (self.render_buffer * self.spp + self.prepare_buffer(outputs)) / (self.spp + 1)
+            self.spp += 1
 
-            dpg.set_value("_log_infer_time", f'{t:.4f}ms ({int(1000/t)} FPS)')
-            dpg.set_value("_log_resolution", f'{int(self.downscale * self.W)}x{int(self.downscale * self.H)}')
-            dpg.set_value("_log_spp", self.spp)
-            dpg.set_value("_texture", self.render_buffer)
+        dpg.set_value("_log_infer_time", f'{t:.4f}ms ({int(1000/t)} FPS)')
+        dpg.set_value("_log_resolution", f'{int(self.downscale * self.W)}x{int(self.downscale * self.H)}')
+        dpg.set_value("_log_spp", self.spp)
+        dpg.set_value("_texture", self.render_buffer)
 
         
     def register_dpg(self):
@@ -191,10 +190,13 @@ class NeRFGUI:
 
             # text prompt
             if self.opt.text is not None:
-                dpg.add_text("text: " + self.opt.text, tag="_log_prompt_text")
-            
+                dpg.add_text(f"text: {self.opt.text}", tag="_log_prompt_text")
+
             if self.opt.negative != '':
-                dpg.add_text("negative text: " + self.opt.negative, tag="_log_prompt_negative_text")
+                dpg.add_text(
+                    f"negative text: {self.opt.negative}",
+                    tag="_log_prompt_negative_text",
+                )
 
             # button theme
             with dpg.theme() as theme_button:
@@ -214,7 +216,7 @@ class NeRFGUI:
             with dpg.group(horizontal=True):
                 dpg.add_text("Infer time: ")
                 dpg.add_text("no data", tag="_log_infer_time")
-            
+
             with dpg.group(horizontal=True):
                 dpg.add_text("SPP: ")
                 dpg.add_text("1", tag="_log_spp")
@@ -269,7 +271,10 @@ class NeRFGUI:
 
                         def callback_mesh(sender, app_data):
                             self.trainer.save_mesh()
-                            dpg.set_value("_log_mesh", "saved " + f'{self.trainer.name}_{self.trainer.epoch}.ply')
+                            dpg.set_value(
+                                "_log_mesh",
+                                f'saved {self.trainer.name}_{self.trainer.epoch}.ply',
+                            )
                             self.trainer.epoch += 1 # use epoch to indicate different calls.
 
                         dpg.add_button(label="mesh", tag="_button_mesh", callback=callback_mesh)
@@ -280,7 +285,7 @@ class NeRFGUI:
                     with dpg.group(horizontal=True):
                         dpg.add_text("", tag="_log_train_log")
 
-            
+
             # rendering options
             with dpg.collapsing_header(label="Options", default_open=True):
 
@@ -302,7 +307,7 @@ class NeRFGUI:
                 def callback_change_mode(sender, app_data):
                     self.mode = app_data
                     self.need_update = True
-                
+
                 dpg.add_combo(('image', 'depth'), label='mode', default_value=self.mode, callback=callback_change_mode)
 
                 # bg_color picker
@@ -383,7 +388,7 @@ class NeRFGUI:
                 def callback_change_shading(sender, app_data):
                     self.shading = app_data
                     self.need_update = True
-                
+
                 dpg.add_combo(('albedo', 'lambertian', 'textureless', 'normal'), label='shading', default_value=self.shading, callback=callback_change_shading)
 
 
@@ -447,9 +452,9 @@ class NeRFGUI:
             dpg.add_mouse_wheel_handler(callback=callback_camera_wheel_scale)
             dpg.add_mouse_drag_handler(button=dpg.mvMouseButton_Right, callback=callback_camera_drag_pan)
 
-        
+
         dpg.create_viewport(title='torch-ngp', width=self.W, height=self.H, resizable=False)
-        
+
         # TODO: seems dearpygui doesn't support resizing texture...
         # def callback_resize(sender, app_data):
         #     self.W = app_data[0]
@@ -465,7 +470,7 @@ class NeRFGUI:
                 dpg.add_theme_style(dpg.mvStyleVar_WindowPadding, 0, 0, category=dpg.mvThemeCat_Core)
                 dpg.add_theme_style(dpg.mvStyleVar_FramePadding, 0, 0, category=dpg.mvThemeCat_Core)
                 dpg.add_theme_style(dpg.mvStyleVar_CellPadding, 0, 0, category=dpg.mvThemeCat_Core)
-        
+
         dpg.bind_item_theme("_primary_window", theme_no_padding)
 
         dpg.setup_dearpygui()

@@ -27,9 +27,8 @@ class DDIMSampler(object):
 
 
     def register_buffer(self, name, attr):
-        if type(attr) == torch.Tensor:
-            if attr.device != torch.device("cuda"):
-                attr = attr.to(torch.device("cuda"))
+        if type(attr) == torch.Tensor and attr.device != torch.device("cuda"):
+            attr = attr.to(torch.device("cuda"))
         setattr(self, name, attr)
 
     def make_schedule(self, ddim_num_steps, ddim_discretize="uniform", ddim_eta=0., verbose=True):
@@ -96,9 +95,8 @@ class DDIMSampler(object):
                 if cbs != batch_size:
                     print(f"Warning: Got {cbs} conditionings but batch-size is {batch_size}")
 
-            else:
-                if conditioning.shape[0] != batch_size:
-                    print(f"Warning: Got {conditioning.shape[0]} conditionings but batch-size is {batch_size}")
+            elif conditioning.shape[0] != batch_size:
+                print(f"Warning: Got {conditioning.shape[0]} conditionings but batch-size is {batch_size}")
 
         self.make_schedule(ddim_num_steps=S, ddim_eta=eta, verbose=verbose)
         # sampling
@@ -134,14 +132,10 @@ class DDIMSampler(object):
                       t_start=-1):
         device = self.model.betas.device
         b = shape[0]
-        if x_T is None:
-            img = torch.randn(shape, device=device)
-        else:
-            img = x_T
-
+        img = torch.randn(shape, device=device) if x_T is None else x_T
         if timesteps is None:
             timesteps = self.ddpm_num_timesteps if ddim_use_original_steps else self.ddim_timesteps
-        elif timesteps is not None and not ddim_use_original_steps:
+        elif not ddim_use_original_steps:
             subset_end = int(min(timesteps / self.ddim_timesteps.shape[0], 1) * self.ddim_timesteps.shape[0]) - 1
             timesteps = self.ddim_timesteps[:subset_end]
 
@@ -287,7 +281,7 @@ class DDIMSampler(object):
 
         out = {'x_encoded': x_next, 'intermediate_steps': inter_steps}
         if return_intermediates:
-            out.update({'intermediates': intermediates})
+            out['intermediates'] = intermediates
         return x_next, out
 
     @torch.no_grad()

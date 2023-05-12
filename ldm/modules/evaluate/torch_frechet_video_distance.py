@@ -73,7 +73,7 @@ def open_url(url: str, num_attempts: int = 10, verbose: bool = True, return_file
     url_data = None
     with requests.Session() as session:
         if verbose:
-            print("Downloading %s ..." % url, end="", flush=True)
+            print(f"Downloading {url} ...", end="", flush=True)
         for attempts_left in reversed(range(num_attempts)):
             try:
                 with session.get(url) as res:
@@ -130,11 +130,13 @@ def get_data_from_str(input_str,nprc = None):
 
     pool = mp.Pool(processes=nprc)
 
-    vids = []
-    for v in tqdm(pool.imap_unordered(load_video,vid_filelist),total=len(vid_filelist),desc='Loading videos...'):
-        vids.append(v)
-
-
+    vids = list(
+        tqdm(
+            pool.imap_unordered(load_video, vid_filelist),
+            total=len(vid_filelist),
+            desc='Loading videos...',
+        )
+    )
     vids = torch.stack(vids,dim=0).float()
 
     return vids
@@ -277,18 +279,16 @@ def compute_statistics(videos_fake, videos_real, device: str='cuda', bs=32, only
             sample_embed.append(feats_sample)
             ref_embed.append(feats_ref)
 
-    out = dict()
-    if len(sample_embed) > 0:
+    out = {}
+    if sample_embed:
         sample_embed = np.concatenate(sample_embed,axis=0)
         mu_sample, sigma_sample = compute_stats(sample_embed)
-        out.update({'mu_sample': mu_sample,
-                    'sigma_sample': sigma_sample})
+        out |= {'mu_sample': mu_sample, 'sigma_sample': sigma_sample}
 
-    if len(ref_embed) > 0:
+    if ref_embed:
         ref_embed = np.concatenate(ref_embed,axis=0)
         mu_ref, sigma_ref = compute_stats(ref_embed)
-        out.update({'mu_ref': mu_ref,
-                    'sigma_ref': sigma_ref})
+        out |= {'mu_ref': mu_ref, 'sigma_ref': sigma_ref}
 
 
     return out

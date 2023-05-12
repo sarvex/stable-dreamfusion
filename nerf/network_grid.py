@@ -18,10 +18,14 @@ class MLP(nn.Module):
         self.dim_hidden = dim_hidden
         self.num_layers = num_layers
 
-        net = []
-        for l in range(num_layers):
-            net.append(nn.Linear(self.dim_in if l == 0 else self.dim_hidden, self.dim_out if l == num_layers - 1 else self.dim_hidden, bias=bias))
-
+        net = [
+            nn.Linear(
+                self.dim_in if l == 0 else self.dim_hidden,
+                self.dim_out if l == num_layers - 1 else self.dim_hidden,
+                bias=bias,
+            )
+            for l in range(num_layers)
+        ]
         self.net = nn.ModuleList(net)
     
     def forward(self, x):
@@ -140,13 +144,10 @@ class NeRFNetwork(NeRFRenderer):
     def background(self, d):
 
         h = self.encoder_bg(d) # [N, C]
-        
+
         h = self.bg_net(h)
 
-        # sigmoid activation for rgb
-        rgbs = torch.sigmoid(h)
-
-        return rgbs
+        return torch.sigmoid(h)
 
     # optimizer utils
     def get_params(self, lr):

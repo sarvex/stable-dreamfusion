@@ -213,13 +213,10 @@ class NeRFNetwork(NeRFRenderer):
     def background(self, d):
 
         h = self.encoder_bg(d) # [N, C]
-        
+
         h = self.bg_net(h)
 
-        # sigmoid activation for rgb
-        rgbs = torch.sigmoid(h)
-
-        return rgbs
+        return torch.sigmoid(h)
 
     # optimizer utils
     def get_params(self, lr):

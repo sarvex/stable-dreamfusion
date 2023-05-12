@@ -126,7 +126,7 @@ def srgb_to_linear(x):
 
 class Trainer(object):
     def __init__(self, 
-		         argv, # command line args
+    		     argv, # command line args
                  name, # name of this experiment
                  opt, # extra conf
                  model, # network 
@@ -173,7 +173,7 @@ class Trainer(object):
         self.scheduler_update_every_step = scheduler_update_every_step
         self.device = device if device is not None else torch.device(f'cuda:{local_rank}' if torch.cuda.is_available() else 'cpu')
         self.console = Console()
-    
+
         model.to(self.device)
         if self.world_size > 1:
             model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
@@ -188,7 +188,7 @@ class Trainer(object):
             for p in self.guidance.parameters():
                 p.requires_grad = False
             self.prepare_embeddings()
-    
+
         if isinstance(criterion, nn.Module):
             criterion.to(self.device)
         self.criterion = criterion
@@ -236,10 +236,12 @@ class Trainer(object):
             self.ckpt_path = os.path.join(self.workspace, 'checkpoints')
             self.best_path = f"{self.ckpt_path}/{self.name}.pth"
             os.makedirs(self.ckpt_path, exist_ok=True)
-        
+
         self.log(f'[INFO] Cmdline: {self.argv}')
         self.log(f'[INFO] Trainer: {self.name} | {self.time_stamp} | {self.device} | {"fp16" if self.fp16 else "fp32"} | {self.workspace}')
-        self.log(f'[INFO] #parameters: {sum([p.numel() for p in model.parameters() if p.requires_grad])}')
+        self.log(
+            f'[INFO] #parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad)}'
+        )
 
         if self.workspace is not None:
             if self.use_checkpoint == "scratch":
@@ -266,17 +268,16 @@ class Trainer(object):
         
         # text embeddings (stable-diffusion)
         if self.opt.text is not None:
-        
-            self.text_z = {}
 
-            self.text_z['default'] = self.guidance.get_text_embeds([self.opt.text])
+            self.text_z = {'default': self.guidance.get_text_embeds([self.opt.text])}
+
             self.text_z['uncond'] = self.guidance.get_text_embeds([self.opt.negative])
 
             for d in ['front', 'side', 'back']:
                 self.text_z[d] = self.guidance.get_text_embeds([f"{self.opt.text}, {d} view"])
         else:
             self.text_z = None
-        
+
         if self.opt.image is not None:
 
             h = int(self.opt.known_view_scale * self.opt.h)
@@ -312,7 +313,7 @@ class Trainer(object):
                 self.image_z = self.guidance.get_img_embeds(rgb_256)
             else:
                 self.image_z = None
-        
+
         else:
             self.image_z = None
 
